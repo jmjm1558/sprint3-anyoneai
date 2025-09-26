@@ -9,16 +9,16 @@ from tensorflow.keras.applications import ResNet50
 from tensorflow.keras.applications.resnet50 import decode_predictions, preprocess_input
 from tensorflow.keras.preprocessing import image
 
-# TODO
-# Connect to Redis and assign to variable `db``
-# Make use of settings.py module to get Redis settings like host, port, etc.
-db = None
+# Conexión a Redis usando la configuración de settings.py
+db = redis.StrictRedis(
+    host=settings.REDIS_IP,
+    port=settings.REDIS_PORT,
+    db=settings.REDIS_DB_ID,
+    decode_responses=True,  # trabajamos con str en lugar de bytes
+)
 
-# TODO
-# Load your ML model and assign to variable `model`
-# See https://drive.google.com/file/d/1ADuBSE4z2ZVIdn66YDSwxKv-58U7WEOn/view?usp=sharing
-# for more information about how to use this model.
-model = None
+# Carga del modelo (una sola vez por proceso)
+model = ResNet50(weights="imagenet")
 
 
 def predict(image_name):
@@ -37,18 +37,20 @@ def predict(image_name):
         Model predicted class as a string and the corresponding confidence
         score as a number.
     """
-    class_name = None
-    pred_probability = None
-    # TODO: Implement the code to predict the class of the image_name
+    # Ruta a la imagen dentro de la carpeta de uploads
+    img_path = os.path.join(settings.UPLOAD_FOLDER, image_name)
 
-    # Load image
+    # Cargar imagen y preprocesar para ResNet50
+    img = image.load_img(img_path, target_size=(224, 224))
+    x = image.img_to_array(img)
+    x = np.expand_dims(x, axis=0)
+    x = preprocess_input(x)
 
-    # Apply preprocessing (convert to numpy array, match model input dimensions (including batch) and use the resnet50 preprocessing)
-
-    # Get predictions using model methods and decode predictions using resnet50 decode_predictions
-    _, class_name, pred_probability = None
-
-    # Convert probabilities to float and round it
+    # Predicción y decodificación top-1
+    preds = model.predict(x)
+    top1 = decode_predictions(preds, top=1)[0][0]  # (class_id, label, prob)
+    class_name = top1[1]
+    pred_probability = float(np.round(top1[2], 4))  # convertir a float y redondear
 
     return class_name, pred_probability
 
@@ -60,40 +62,32 @@ def classify_process():
     model to get predictions and stores the results back in Redis using
     the original job ID so other services can see it was processed and access
     the results.
-
-    Load image from the corresponding folder based on the image name
-    received, then, run our ML model to get predictions.
     """
     while True:
-        # Inside this loop you should add the code to:
-        #   1. Take a new job from Redis
-        #   2. Run your ML model on the given data
-        #   3. Store model prediction in a dict with the following shape:
-        #      {
-        #         "prediction": str,
-        #         "score": float,
-        #      }
-        #   4. Store the results on Redis using the original job ID as the key
-        #      so the API can match the results it gets to the original job
-        #      sent
-        # Hint: You should be able to successfully implement the communication
-        #       code with Redis making use of functions `brpop()` and `set()`.
-        # TODO
-        # Take a new job from Redis
+        # 1) Tomar un nuevo job desde Redis (bloquea hasta que llegue uno)
+        _, job_json = db.brpop(settings.REDIS_QUEUE)
 
-        # Decode the JSON data for the given job
+        # 2) Decodificar datos del job
+        job = json.loads(job_json)
 
-        # Important! Get and keep the original job ID
+        # 3) Conservar el ID original del job
+        job_id = job.get("id") or job.get("job_id")
 
-        # Run the loaded ml model (use the predict() function)
+        # 4) Obtener nombre de la imagen
+        image_name = job.get("image_name") or job.get("image_file_name")
 
-        # Prepare a new JSON with the results
-        output = {"prediction": None, "score": None}
+        # 5) Ejecutar predicción
+        try:
+            class_name, pred_probability = predict(image_name)
+            output = {"prediction": class_name, "score": float(pred_probability)}
+        except Exception:
+            # Resultado mínimo ante error (por ejemplo, imagen inexistente)
+            output = {"prediction": "error", "score": 0.0}
 
-        # Store the job results on Redis using the original
-        # job ID as the key
+        # 6) Guardar resultado en Redis usando la clave del job original
+        db.set(job_id, json.dumps(output))
 
-        # Sleep for a bit
+        # 7) Pausa breve
         time.sleep(settings.SERVER_SLEEP)
 
 
