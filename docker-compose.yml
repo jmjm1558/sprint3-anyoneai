@@ -1,4 +1,4 @@
-version: "3.2"
+#version: "3.2"
 services:
   api:
     image: flask_api
@@ -19,6 +19,11 @@ services:
       POSTGRES_PASSWORD: $POSTGRES_PASSWORD
       DATABASE_HOST: $DATABASE_HOST
       SECRET_KEY: $SECRET_KEY
+      # ---- Redis (añadido) ----
+      REDIS_IP: redis
+      REDIS_PORT: "6379"
+      REDIS_DB_ID: "0"
+      REDIS_QUEUE: service_queue
     networks:
       - shared_network
 
@@ -41,7 +46,6 @@ services:
     networks:
       - shared_network
 
-
   model:
     image: ml_service
     container_name: ml_service
@@ -52,6 +56,12 @@ services:
       - redis
     volumes:
       - ./uploads:/src/uploads
+    environment:
+      # ---- Redis (añadido) ----
+      REDIS_IP: redis
+      REDIS_PORT: "6379"
+      REDIS_DB_ID: "0"
+      REDIS_QUEUE: service_queue
     networks:
       - shared_network
 
