@@ -1,10 +1,9 @@
-import unittest
-
 import requests
 
 
 def login(username, password):
-    url = f"http://0.0.0.0:8000/login"
+    # IMPORTANTE: 0.0.0.0 NO sirve como destino para clientes
+    url = "http://localhost:8000/login"
     headers = {
         "accept": "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
@@ -40,6 +39,6 @@ def test_predict():
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["success"] == True
+    assert data["success"] is True
     assert data["prediction"] == "Eskimo_dog"
     assert data["score"] == 0.9346

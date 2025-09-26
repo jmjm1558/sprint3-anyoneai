@@ -1,4 +1,4 @@
-#version: "3.2"
+
 services:
   api:
     image: flask_api
@@ -11,15 +11,17 @@ services:
     depends_on:
       - redis
       - model
+      - db
     volumes:
       - ./uploads:/src/uploads
     environment:
-      POSTGRES_DB: $POSTGRES_DB
-      POSTGRES_USER: $POSTGRES_USER
-      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
-      DATABASE_HOST: $DATABASE_HOST
-      SECRET_KEY: $SECRET_KEY
-      # ---- Redis (añadido) ----
+    
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DATABASE_HOST: db
+      SECRET_KEY: ${SECRET_KEY}
+      # Redis
       REDIS_IP: redis
       REDIS_PORT: "6379"
       REDIS_DB_ID: "0"
@@ -29,6 +31,7 @@ services:
 
   redis:
     image: redis:6.2.6
+    container_name: redis
     networks:
       - shared_network
 
@@ -36,9 +39,9 @@ services:
     image: postgres:latest
     container_name: postgres_db
     environment:
-      POSTGRES_DB: $POSTGRES_DB
-      POSTGRES_USER: $POSTGRES_USER
-      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -57,7 +60,6 @@ services:
     volumes:
       - ./uploads:/src/uploads
     environment:
-      # ---- Redis (añadido) ----
       REDIS_IP: redis
       REDIS_PORT: "6379"
       REDIS_DB_ID: "0"
@@ -76,8 +78,8 @@ services:
     depends_on:
       - api
     environment:
-      - API_HOST=api
-      - API_PORT=5000
+  
+      API_BASE_URL: http://api:5000
     networks:
       - shared_network
 

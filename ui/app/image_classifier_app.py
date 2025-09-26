@@ -1,126 +1,143 @@
-from typing import Optional
-
+import os
+import io
 import requests
 import streamlit as st
-from app.settings import API_BASE_URL
 from PIL import Image
 
-def login(username: str, password: str) -> Optional[str]:
-    url = f"{API_BASE_URL}/login"
-    headers = {
-        "accept": "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-    }
-    data = {
-        "grant_type": "",
-        "username": username,
-        "password": password,
-        "scope": "",
-        "client_id": "",
-        "client_secret": "",
-    }
-    resp = requests.post(url, headers=headers, data=data)
-    if resp.status_code == 200:
-        return resp.json().get("access_token")
-    return None
+
+# ---------- Config API ----------
+def _api_base_url() -> str:
+    # Prioridad: API_BASE_URL -> API_HOST/API_PORT -> localhost:8000
+    base = os.getenv("API_BASE_URL")
+    if not base:
+        host = os.getenv("API_HOST", "localhost")
+        port = os.getenv("API_PORT", "8000")
+        base = f"http://{host}:{port}"
+    return base.rstrip("/")
 
 
-
-def predict(token: str, uploaded_file) -> requests.Response:
-    url = f"{API_BASE_URL}/model/predict"
-    files = {
-        "file": (uploaded_file.name, uploaded_file.getvalue())
-    }
-    headers = {"Authorization": f"Bearer {token}"}
-    return requests.post(url, headers=headers, files=files)
+def api(path: str) -> str:
+    return f"{_api_base_url()}{path}"
 
 
-def send_feedback(
-    token: str, feedback: str, score: float, prediction: str, image_file_name: str
-) -> requests.Response:
-    url = f"{API_BASE_URL}/feedback"   # <- sin barra final
-    payload = {
-        "feedback": feedback,
-        "score": score,
-        "predicted_class": prediction,
-        "image_file_name": image_file_name,
-    }
-    headers = {"Authorization": f"Bearer {token}"}
-    return requests.post(url, headers=headers, json=payload)
+# ---------- Low-level calls ----------
+def api_login(username: str, password: str):
+    try:
+        headers = {
+            "accept": "application/json",
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        data = {
+            "grant_type": "",
+            "username": username,
+            "password": password,
+            "scope": "",
+            "client_id": "",
+            "client_secret": "",
+        }
+        r = requests.post(api("/login"), headers=headers, data=data, timeout=10)
+        if r.status_code == 200:
+            return r.json().get("access_token"), None
+        return None, f"Login inválido ({r.status_code}): {r.text}"
+    except requests.RequestException as e:
+        return None, f"No se pudo conectar con la API: {e}"
 
 
-st.set_page_config(page_title="Image Classifier", page_icon="📷")
-st.markdown(
-    "<h1 style='text-align: center; color: #4B89DC;'>Image Classifier</h1>",
-    unsafe_allow_html=True,
-)
+def api_predict(token: str, file_name: str, file_bytes: bytes):
+    try:
+        headers = {"Authorization": f"Bearer {token}"}
+        files = [("file", (file_name, io.BytesIO(file_bytes), "image/jpeg"))]
+        r = requests.post(api("/model/predict"), headers=headers, files=files, timeout=30)
+        if r.status_code == 200:
+            return r.json(), None
+        return None, f"Error {r.status_code}: {r.text}"
+    except requests.RequestException as e:
+        return None, f"No se pudo conectar con la API: {e}"
+
+
+def api_feedback(token: str, payload: dict):
+    try:
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+        r = requests.post(api("/feedback/"), headers=headers, json=payload, timeout=10)
+        if r.status_code in (200, 201):
+            return r.json(), None
+        return None, f"Error {r.status_code}: {r.text}"
+    except requests.RequestException as e:
+        return None, f"No se pudo conectar con la API: {e}"
+
+
+# ---------- UI ----------
+st.set_page_config(page_title="Image Classifier", page_icon="🐶", layout="centered")
+
+st.title("🐶 Image Classifier UI")
 
 if "token" not in st.session_state:
-    st.markdown("## Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        token = login(username, password)
+    st.session_state.token = None
+
+with st.sidebar:
+    st.subheader("API")
+    st.code(_api_base_url())
+
+if st.session_state.token is None:
+    st.subheader("Login")
+    email = st.text_input("Email", "admin@example.com")
+    password = st.text_input("Password", type="password", value="admin")
+    if st.button("Ingresar", type="primary"):
+        token, err = api_login(email, password)
         if token:
             st.session_state.token = token
-            st.success("Login successful!")
+            st.success("✅ Login correcto")
+            st.rerun()
         else:
-            st.error("Login failed. Please check your credentials.")
+            st.error(err or "Credenciales inválidas")
 else:
-    st.success("You are logged in!")
+    st.success("Sesión iniciada ✅")
+    if st.button("Cerrar sesión"):
+        st.session_state.token = None
+        st.rerun()
 
+    st.divider()
+    st.subheader("Predicción")
 
-if "token" in st.session_state:
-    token = st.session_state.token
+    file = st.file_uploader("Subí una imagen", type=["jpg", "jpeg", "png"])
+    if file:
+        img = Image.open(file).convert("RGB")
+        st.image(img, caption=file.name, use_container_width=True)
 
-    uploaded_file = st.file_uploader("Sube una imagen", type=["jpg", "jpeg", "png"])
-
-    print(type(uploaded_file))
-
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Imagen subida", width=300)
-
-    if "classification_done" not in st.session_state:
-        st.session_state.classification_done = False
-
-    if st.button("Classify"):
-        if uploaded_file is not None:
-            response = predict(token, uploaded_file)
-            if response.status_code == 200:
-                result = response.json()
-                st.write(f"**Prediction:** {result['prediction']}")
-                st.write(f"**Score:** {result['score']}")
-                st.session_state.classification_done = True
-                st.session_state.result = result
+        if st.button("🚀 Predecir", type="primary"):
+            data, err = api_predict(st.session_state.token, file.name, file.getvalue())
+            if err:
+                st.error(err)
             else:
-                st.error("Error classifying image. Please try again.")
-        else:
-            st.warning("Please upload an image before classifying.")
+                st.session_state.last_prediction = data
+                st.json(data)
 
-    if st.session_state.classification_done:
-        st.markdown("## Feedback")
-        feedback = st.text_area("If the prediction was wrong, please provide feedback.")
-        if st.button("Send Feedback"):
-            if feedback:
-                token = st.session_state.token
-                result = st.session_state.result
-                score = result["score"]
-                prediction = result["prediction"]
-                image_file_name = result.get("image_file_name", "uploaded_image")
-                response = send_feedback(
-                    token, feedback, score, prediction, image_file_name
-                )
-                if response.status_code == 201:
-                    st.success("Thanks for your feedback!")
-                else:
-                    st.error("Error sending feedback. Please try again.")
+    st.divider()
+    st.subheader("Feedback")
+    if "last_prediction" in st.session_state:
+        pred = st.session_state.last_prediction
+        suggested = pred.get("prediction")
+        score = pred.get("score")
+
+        correct = st.selectbox("¿La predicción fue correcta?", ["Sí", "No"])
+        true_label = st.text_input("Etiqueta correcta (si no fue correcta)", "" if correct == "Sí" else suggested or "")
+        notes = st.text_area("Notas (opcional)")
+
+        if st.button("Enviar feedback"):
+            payload = {
+                "prediction": suggested,
+                "score": score,
+                "is_correct": (correct == "Sí"),
+                "true_label": true_label if correct == "No" else suggested,
+                "notes": notes,
+            }
+            _, err = api_feedback(st.session_state.token, payload)
+            if err:
+                st.error(err)
             else:
-                st.warning("Please provide feedback before sending.")
-                st.warning("Please provide feedback before sending.")
-
-    st.markdown("<hr style='border:2px solid #4B89DC;'>", unsafe_allow_html=True)
-    st.markdown(
-        "<p style='text-align: center; color: #4B89DC;'>2024 Image Classifier App</p>",
-        unsafe_allow_html=True,
-    )
+                st.success("Gracias por el feedback 🙌")
+    else:
+        st.info("Hacé una predicción primero para poder enviar feedback.")
