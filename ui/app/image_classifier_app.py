@@ -1,5 +1,6 @@
-import os
 import io
+import os
+
 import requests
 import streamlit as st
 from PIL import Image
@@ -47,7 +48,9 @@ def api_predict(token: str, file_name: str, file_bytes: bytes):
     try:
         headers = {"Authorization": f"Bearer {token}"}
         files = [("file", (file_name, io.BytesIO(file_bytes), "image/jpeg"))]
-        r = requests.post(api("/model/predict"), headers=headers, files=files, timeout=30)
+        r = requests.post(
+            api("/model/predict"), headers=headers, files=files, timeout=30
+        )
         if r.status_code == 200:
             return r.json(), None
         return None, f"Error {r.status_code}: {r.text}"
@@ -123,7 +126,10 @@ else:
         score = pred.get("score")
 
         correct = st.selectbox("¿La predicción fue correcta?", ["Sí", "No"])
-        true_label = st.text_input("Etiqueta correcta (si no fue correcta)", "" if correct == "Sí" else suggested or "")
+        true_label = st.text_input(
+            "Etiqueta correcta (si no fue correcta)",
+            "" if correct == "Sí" else suggested or "",
+        )
         notes = st.text_area("Notas (opcional)")
 
         if st.button("Enviar feedback"):

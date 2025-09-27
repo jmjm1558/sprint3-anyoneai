@@ -11,6 +11,7 @@ def allowed_file(filename):
     ext = filename.rsplit(".", 1)[-1].lower()
     return ext in {"png", "jpg", "jpeg", "gif"}
 
+
 async def get_file_hash(file):
     """
     MD5 del contenido + extensión original en minúsculas.
@@ -18,7 +19,7 @@ async def get_file_hash(file):
     """
     content = await file.read()
     digest = hashlib.md5(content).hexdigest()
-    await file.seek(0)  # para que pueda volver a leerse después
+    await file.seek(0)
 
     _, ext = os.path.splitext(file.filename or "")
     ext = (ext or "").lower().lstrip(".") or "jpg"

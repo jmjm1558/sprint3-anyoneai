@@ -1,0 +1,20 @@
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+exclude = '''
+(
+  \.venv
+| venv
+| \.git
+| \.pytest_cache
+| __pycache__
+| uploads
+| dist
+| build
+)
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = ["venv", ".venv", "uploads", "build", "dist", ".git", ".pytest_cache", "__pycache__"]

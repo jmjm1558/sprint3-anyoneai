@@ -1,10 +1,11 @@
-﻿from locust import HttpUser, task, between
+﻿from locust import HttpUser, between, task
 
 BASE = "http://localhost:8000"
-PREDICT = "/api/predict"   # <-- CAMBIA a la ruta real que viste en el código
-USE_JSON = True            # <-- Pon False si tu endpoint usa archivo
+PREDICT = "/api/predict"  # <-- CAMBIA a la ruta real que viste en el código
+USE_JSON = True  # <-- Pon False si tu endpoint usa archivo
 FILE_PATH = r".\uploads\sample.jpg"  # <-- Cambia solo si USE_JSON=False
-JSON_BODY = {"text": "hola"}         # <-- Cambia a los campos MÍNIMOS reales si es JSON
+JSON_BODY = {"text": "hola"}  # <-- Cambia a los campos MÍNIMOS reales si es JSON
+
 
 class ApiUser(HttpUser):
     wait_time = between(0.1, 0.5)
