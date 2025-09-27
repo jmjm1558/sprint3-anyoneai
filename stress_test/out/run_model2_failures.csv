@@ -1,0 +1,5 @@
+Method,Name,Error,Occurrences
+POST,/model/predict,RemoteDisconnected('Remote end closed connection without response'),122
+GET,/,RemoteDisconnected('Remote end closed connection without response'),5
+GET,/,HTTPError('404 Client Error: Not Found for url: /'),109
+GET,/docs,RemoteDisconnected('Remote end closed connection without response'),28
